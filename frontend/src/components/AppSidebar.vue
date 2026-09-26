@@ -42,6 +42,7 @@ const emit = defineEmits<{
         type="button"
         class="history-item"
         :class="{ 'history-item--active': session.sessionId === activeSessionId }"
+        :aria-current="session.sessionId === activeSessionId ? 'page' : undefined"
         @click="emit('selectSession', session.sessionId)"
       >
         <MessageSquare :size="16" />

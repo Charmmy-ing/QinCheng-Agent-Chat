@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { BookOpenCheck, CircleAlert, ExternalLink } from "@lucide/vue";
+import { ArrowRight, BookOpenCheck, CircleAlert, ExternalLink } from "@lucide/vue";
 import type { WorkspaceBlock } from "../../types/agent";
 
 type PolicyMatchBlock = Extract<WorkspaceBlock, { type: "policy_matches" }>;
@@ -58,6 +58,10 @@ function safeSourceUrl(value?: string): string | null {
         <ul><li v-for="item in match.missingConditions" :key="item">{{ item }}</li></ul>
       </div>
       <blockquote v-if="match.detail.clauseExcerpt">{{ match.detail.clauseExcerpt }}</blockquote>
+      <div v-if="match.nextAction" class="policy-next-action">
+        <ArrowRight :size="15" />
+        <span><strong>下一步操作</strong>{{ match.nextAction }}</span>
+      </div>
     </article>
   </section>
 </template>

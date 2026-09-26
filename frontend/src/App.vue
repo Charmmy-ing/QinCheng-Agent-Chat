@@ -54,10 +54,10 @@ function handleWorkspaceAction(action: AgentAction): void {
 
     <main class="agent-main">
       <nav class="mobile-view-switcher" aria-label="工作区视图">
-        <button type="button" :class="{ active: mobileView === 'chat' }" @click="mobileView = 'chat'">
+        <button type="button" :class="{ active: mobileView === 'chat' }" :aria-pressed="mobileView === 'chat'" @click="mobileView = 'chat'">
           <MessagesSquare :size="16" />对话
         </button>
-        <button type="button" :class="{ active: mobileView === 'workspace' }" @click="mobileView = 'workspace'">
+        <button type="button" :class="{ active: mobileView === 'workspace' }" :aria-pressed="mobileView === 'workspace'" @click="mobileView = 'workspace'">
           <PanelRight :size="16" />工作台
         </button>
       </nav>

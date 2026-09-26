@@ -171,6 +171,7 @@ interface PolicyMatch {
   name: string;
   status: "potential" | "pending" | "not_eligible";
   matchReason: string;
+  nextAction?: string;
   satisfiedConditions: string[];
   missingConditions: string[];
   detail: {
@@ -185,7 +186,7 @@ interface PolicyMatch {
 }
 ```
 
-匹配状态、原因和条件必须由后端 RAG 与规则模块提供。前端只展示，不得根据用户资料自行判断。`sourceUrl` 只接受 HTTP/HTTPS 地址，并以新窗口打开；无有效链接时只显示来源名称。
+匹配状态、原因、条件和 `nextAction` 必须由后端 RAG、规则模块或 Workflow Agent 提供。前端只展示，不得根据用户资料自行判断。`sourceUrl` 只接受 HTTP/HTTPS 地址，并以新窗口打开；无有效链接时只显示来源名称。
 
 ## 6. Workspace 动作示例
 

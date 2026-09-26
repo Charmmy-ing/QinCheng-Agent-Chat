@@ -90,6 +90,7 @@ function policyPreview(): PolicyMatch {
     name: "政策匹配结果待接入",
     status: "pending",
     matchReason: "此卡片仅展示未来政策匹配结果的结构，不代表任何真实政策结论。",
+    nextAction: "等待接入政策知识库和规则模块后，再生成可执行的办理建议。",
     satisfiedConditions: [],
     missingConditions: ["等待政策知识库返回政策依据", "等待规则模块判断资格条件"],
     detail: {

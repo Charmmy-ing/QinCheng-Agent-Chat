@@ -44,6 +44,7 @@ export interface PolicyMatch {
   name: string;
   status: "potential" | "pending" | "not_eligible";
   matchReason: string;
+  nextAction?: string;
   satisfiedConditions: string[];
   missingConditions: string[];
   detail: PolicyDetail;
