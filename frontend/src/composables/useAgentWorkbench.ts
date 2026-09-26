@@ -9,6 +9,7 @@ import type {
   AgentAction,
   ChatMessage,
   ChatSession,
+  WorkspaceState,
 } from "../types/agent";
 
 const STORAGE_KEY = "graduate-policy-agent-workbench-v1";
@@ -22,10 +23,18 @@ function createId(prefix: string): string {
 }
 
 function getOrCreateUserId(): string {
-  const existing = localStorage.getItem(USER_KEY);
-  if (existing) return existing;
+  try {
+    const existing = localStorage.getItem(USER_KEY);
+    if (existing) return existing;
+  } catch {
+    // Browsers can disable storage; the current page can still use a temporary ID.
+  }
   const value = createId("user");
-  localStorage.setItem(USER_KEY, value);
+  try {
+    localStorage.setItem(USER_KEY, value);
+  } catch {
+    // Keep the generated ID in memory for this page.
+  }
   return value;
 }
 
@@ -39,22 +48,59 @@ function createSession(): ChatSession {
   };
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
+}
+
+function isChatMessage(value: unknown): value is ChatMessage {
+  return isRecord(value)
+    && typeof value.id === "string"
+    && (value.role === "user" || value.role === "assistant")
+    && typeof value.content === "string";
+}
+
+function isWorkspaceState(value: unknown): value is WorkspaceState {
+  return isRecord(value)
+    && typeof value.sessionId === "string"
+    && isRecord(value.task)
+    && isRecord(value.profile)
+    && Array.isArray(value.documents)
+    && Array.isArray(value.policyMatches)
+    && Array.isArray(value.blocks);
+}
+
 function restoreSessions(): ChatSession[] {
   try {
-    const saved = JSON.parse(localStorage.getItem(STORAGE_KEY) ?? "[]") as ChatSession[];
+    const saved = JSON.parse(localStorage.getItem(STORAGE_KEY) ?? "[]") as unknown;
     if (!Array.isArray(saved)) return [];
-    return saved.slice(0, 20).map((session) => ({
-      ...session,
-      messages: session.messages.map((message) =>
-        message.status === "sending"
-          ? { ...message, status: "error", errorMessage: "上次请求已中断" }
-          : message,
-      ),
-      workspace: session.workspace ?? createMockWorkspace(session.sessionId),
-    }));
+    return saved.slice(0, 20).flatMap((value): ChatSession[] => {
+      if (!isRecord(value) || typeof value.sessionId !== "string") return [];
+      const messages = Array.isArray(value.messages)
+        ? value.messages.filter(isChatMessage).map((message) =>
+            message.status === "sending"
+              ? { ...message, status: "error" as const, errorMessage: "上次请求已中断" }
+              : message,
+          )
+        : [];
+      return [{
+        sessionId: value.sessionId,
+        title: typeof value.title === "string" ? value.title : "历史对话",
+        messages,
+        workspace: isWorkspaceState(value.workspace)
+          ? value.workspace
+          : createMockWorkspace(value.sessionId),
+      }];
+    });
   } catch {
     return [];
   }
+}
+
+function mergeProfile(current: UserProfile, incoming: UserProfile): UserProfile {
+  const definedFields = Object.fromEntries(
+    Object.entries(incoming).filter(([, value]) => value !== null && value !== undefined),
+  ) as UserProfile;
+  return { ...current, ...definedFields };
 }
 
 export function useAgentWorkbench() {
@@ -139,10 +185,10 @@ export function useAgentWorkbench() {
       );
       assistantMessage.content = response.replyText;
       assistantMessage.status = "sent";
-      session.workspace.profile = {
-        ...session.workspace.profile,
-        ...response.userProfile,
-      };
+      session.workspace.profile = mergeProfile(
+        session.workspace.profile,
+        response.userProfile,
+      );
     } catch (error) {
       assistantMessage.status = "error";
       if (error instanceof DOMException && error.name === "AbortError") {
@@ -181,7 +227,13 @@ export function useAgentWorkbench() {
 
   watch(
     sessions,
-    (value) => localStorage.setItem(STORAGE_KEY, JSON.stringify(value)),
+    (value) => {
+      try {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(value));
+      } catch {
+        // Storage failure must not interrupt the active conversation.
+      }
+    },
     { deep: true },
   );
 

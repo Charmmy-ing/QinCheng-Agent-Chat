@@ -5,6 +5,7 @@ import AppSidebar from "./components/AppSidebar.vue";
 import ChatPanel from "./components/ChatPanel.vue";
 import AgentWorkspace from "./components/workspace/AgentWorkspace.vue";
 import { useAgentWorkbench } from "./composables/useAgentWorkbench";
+import type { AgentAction } from "./types/agent";
 
 const suggestions = [
   "我是今年毕业生，想了解本地就业补贴",
@@ -31,6 +32,11 @@ const {
 
 function startSession(): void {
   newSession();
+  mobileView.value = "chat";
+}
+
+function handleWorkspaceAction(action: AgentAction): void {
+  runWorkspaceAction(action);
   mobileView.value = "chat";
 }
 </script>
@@ -73,7 +79,7 @@ function startSession(): void {
           :class="{ 'mobile-view-hidden': mobileView !== 'workspace' }"
           :state="workspace"
           :busy="busy"
-          @action="runWorkspaceAction"
+          @action="handleWorkspaceAction"
         />
       </div>
     </main>
