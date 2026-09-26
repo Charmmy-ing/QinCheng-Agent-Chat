@@ -3,14 +3,14 @@ import { computed } from "vue";
 import { Bot, RotateCcw } from "@lucide/vue";
 import DOMPurify from "dompurify";
 import MarkdownIt from "markdown-it";
-import type { DisplayMessage } from "../types/chat";
+import type { ChatMessage } from "../types/agent";
 
 const props = defineProps<{
-  message: DisplayMessage;
+  message: ChatMessage;
 }>();
 
 const emit = defineEmits<{
-  retry: [message: DisplayMessage];
+  retry: [message: ChatMessage];
 }>();
 
 const markdown = new MarkdownIt({

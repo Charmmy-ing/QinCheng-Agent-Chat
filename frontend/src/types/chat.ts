@@ -42,17 +42,3 @@ export interface ApiResponse<T> {
   traceId: string;
   data: T | null;
 }
-
-export interface DisplayMessage {
-  id: string;
-  role: "user" | "assistant";
-  content: string;
-  status?: "sending" | "sent" | "error";
-  errorMessage?: string;
-}
-
-export interface StoredConversation {
-  sessionId: string;
-  title: string;
-  messages: DisplayMessage[];
-}

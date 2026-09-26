@@ -1,11 +1,13 @@
-# 应届毕业生就业创业政策 Agent - 第一阶段 Chat
+# 应届毕业生就业政策 Agent 工作台
 
-本目录是独立重写的第一阶段实现，只负责“用户与 LLM 对话”。原 MVP 位于上级目录，本模块不依赖其代码。
+本目录包含第一阶段真实 Chat 链路，以及面向后续 Agent 的三栏工作台前端。当前正式能力仍是“用户与 LLM 对话”；右侧 Workspace 使用明确标记的 Mock 数据演示 Agent 与用户如何联动，不包含真实政策判断、RAG、OCR 或文件上传。
 
 ## 目录
 
 - `frontend/`：Vue 3 + TypeScript + Vite 对话界面
 - `backend/`：FastAPI Chat API、会话上下文和 LLM Provider
+- `docs/Frontend Architecture.md`：三栏页面、Workspace 和后续接入说明
+- `docs/Frontend API Contract.md`：前端接口与状态数据契约
 - `Chat 模块接口规范.md`：接口调用说明
 - `后续开发对接说明.md`：Agent、RAG、Tool 后续接入位置
 
