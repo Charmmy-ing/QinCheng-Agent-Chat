@@ -1,6 +1,11 @@
 from __future__ import annotations
 
+from collections.abc import AsyncIterator
+from dataclasses import dataclass
+from typing import Literal
+
 from app.models.chat import ChatData, ChatRequest
+from app.core.errors import LLMServiceError
 from app.services.llm.base import LLMMessage, LLMProvider
 from app.stores.session_store import InMemorySessionStore
 
@@ -14,12 +19,19 @@ SYSTEM_PROMPT = """你是面向应届毕业生的就业创业政策对话助手�
 默认使用简体中文回答，表达直接、简洁，可使用 Markdown。"""
 
 
+@dataclass(frozen=True)
+class ChatStreamEvent:
+    kind: Literal["delta", "done"]
+    text: str = ""
+    data: ChatData | None = None
+
+
 class ChatService:
     def __init__(self, provider: LLMProvider, store: InMemorySessionStore) -> None:
         self._provider = provider
         self._store = store
 
-    async def chat(self, request: ChatRequest) -> ChatData:
+    async def _messages(self, request: ChatRequest) -> tuple[str, list[LLMMessage]]:
         user_message = request.message.strip()
         history = await self._store.get_messages(request.sessionId, request.userId)
         messages: list[LLMMessage] = [
@@ -27,11 +39,10 @@ class ChatService:
             *history,
             {"role": "user", "content": user_message},
         ]
-        reply = await self._provider.complete(messages)
-        await self._store.append_exchange(
-            request.sessionId, request.userId, user_message, reply
-        )
+        return user_message, messages
 
+    @staticmethod
+    def _result(request: ChatRequest, reply: str) -> ChatData:
         return ChatData(
             sessionId=request.sessionId,
             replyText=reply,
@@ -43,3 +54,26 @@ class ChatService:
             plan=None,
             materialResults=[],
         )
+
+    async def chat(self, request: ChatRequest) -> ChatData:
+        user_message, messages = await self._messages(request)
+        reply = await self._provider.complete(messages)
+        await self._store.append_exchange(
+            request.sessionId, request.userId, user_message, reply
+        )
+        return self._result(request, reply)
+
+    async def stream_chat(self, request: ChatRequest) -> AsyncIterator[ChatStreamEvent]:
+        user_message, messages = await self._messages(request)
+        chunks: list[str] = []
+        async for chunk in self._provider.stream(messages):
+            chunks.append(chunk)
+            yield ChatStreamEvent(kind="delta", text=chunk)
+
+        reply = "".join(chunks).strip()
+        if not reply:
+            raise LLMServiceError("模型服务返回了空内容，请重新发送")
+        await self._store.append_exchange(
+            request.sessionId, request.userId, user_message, reply
+        )
+        yield ChatStreamEvent(kind="done", data=self._result(request, reply))

@@ -11,12 +11,12 @@ Chat 模块负责完成第一阶段的真实对话链路：前端收集用户消
 ```text
 用户
   -> Vue 对话界面
-  -> POST /api/agent/chat
+  -> POST /api/agent/chat/stream（前端默认）
   -> ChatService
   -> LLMProvider
   -> OpenAI 兼容的 LLM API
-  -> 统一 JSON 响应
-  -> 前端展示 Markdown
+  -> SSE 增量事件
+  -> 前端逐步展示 Markdown
 ```
 
 ## 3. 接口地址与请求方式
@@ -28,6 +28,29 @@ Chat 模块负责完成第一阶段的真实对话链路：前端收集用户消
 - 请求格式：`application/json; charset=utf-8`
 - 可选请求头：`X-Trace-Id`，用于端到端排查问题；不传时由后端生成
 - `Authorization` 请求头已为后续鉴权预留，当前阶段不校验
+
+原接口 `POST /api/agent/chat` 保持不变，返回一次性 JSON，供兼容调用和测试使用。前端默认调用 `POST /api/agent/chat/stream`，请求 JSON 与原接口完全相同，响应类型为 `text/event-stream`。
+
+流式响应包含三种事件：
+
+| 事件 | data | 含义 |
+| --- | --- | --- |
+| `delta` | `{ "text": "回答片段" }` | 模型新生成的文本 |
+| `done` | 完整 `ApiResponse<ChatData>` | 回答完成，包含最终完整数据 |
+| `error` | `ApiResponse`，`data` 为 `null` | 流式生成过程中发生错误 |
+
+流式示例：
+
+```text
+event: delta
+data: {"text":"你好"}
+
+event: delta
+data: {"text":"，我可以帮你梳理就业政策问题。"}
+
+event: done
+data: {"code":0,"message":"success","traceId":"demo-001","data":{"sessionId":"session-demo-0001","replyText":"你好，我可以帮你梳理就业政策问题。"}}
+```
 
 ## 4. Request JSON
 
@@ -134,7 +157,7 @@ Chat 模块负责完成第一阶段的真实对话链路：前端收集用户消
 }
 ```
 
-前端会展示 `message` 和 `traceId`，并提供重试按钮。
+非流式接口通过 HTTP 错误响应返回错误；流式生成开始后的错误通过 `error` 事件返回。前端会展示 `message` 和 `traceId`，并提供重试按钮。
 
 ## 8. 如何调用
 

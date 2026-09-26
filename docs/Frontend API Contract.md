@@ -2,13 +2,16 @@
 
 ## 1. 当前正式接口
 
-前端当前只调用一个正式业务接口：
+前端默认调用流式业务接口：
 
 ```text
-POST /api/agent/chat
+POST /api/agent/chat/stream
 Content-Type: application/json
+Accept: text/event-stream
 X-Trace-Id: 可选，前端自动生成
 ```
+
+`POST /api/agent/chat` 继续保留，请求字段相同，返回一次性 JSON。它用于兼容现有调用方和自动化测试。
 
 Workspace 当前没有新增后端接口。Workspace 操作会更新演示状态，并通过同一个 Chat 接口把用户选择交给 LLM。
 
@@ -94,6 +97,22 @@ Workspace 当前没有新增后端接口。Workspace 操作会更新演示状态
 ```
 
 前端会显示 `message` 和 `traceId`，并提供重试按钮。网络中断、无法解析的响应和用户主动终止请求也有独立提示。
+
+### 流式事件
+
+流式接口使用 SSE 文本帧：
+
+```text
+event: delta
+data: {"text":"新生成的文本"}
+
+event: done
+data: {"code":0,"message":"success","traceId":"trace-123","data":{...}}
+```
+
+- `delta`：可以出现多次，前端立即追加 `text`。
+- `done`：只出现一次，携带完整 `ChatData`。
+- `error`：流开始后的错误，携带统一错误结构；出现后不会再有 `done`。
 
 ## 5. 前端核心数据结构
 

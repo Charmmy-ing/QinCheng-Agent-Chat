@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import json
+
 from fastapi.testclient import TestClient
 
 from app.core.config import Settings
@@ -29,6 +31,23 @@ class TimeoutProvider(LLMProvider):
 
     async def complete(self, messages: list[LLMMessage]) -> str:
         raise LLMTimeoutError()
+
+
+class StreamingProvider(RecordingProvider):
+    async def stream(self, messages: list[LLMMessage]):
+        self.calls.append([message.copy() for message in messages])
+        yield "第一段"
+        yield "，第二段。"
+
+
+def parse_sse(text: str) -> list[tuple[str, dict]]:
+    events = []
+    for block in text.strip().split("\n\n"):
+        lines = block.splitlines()
+        event = next(line[6:].strip() for line in lines if line.startswith("event:"))
+        data = next(line[5:].strip() for line in lines if line.startswith("data:"))
+        events.append((event, json.loads(data)))
+    return events
 
 
 def settings() -> Settings:
@@ -107,6 +126,28 @@ def test_second_turn_sends_server_side_history_to_provider() -> None:
     ]
 
 
+def test_stream_chat_emits_chunks_and_saves_history() -> None:
+    provider = StreamingProvider(["第二轮回答"])
+    client = TestClient(create_app(settings(), provider))
+
+    response = client.post("/api/agent/chat/stream", json=payload("第一轮问题"))
+
+    assert response.status_code == 200
+    assert response.headers["content-type"].startswith("text/event-stream")
+    events = parse_sse(response.text)
+    assert [event for event, _ in events] == ["delta", "delta", "done"]
+    assert events[0][1] == {"text": "第一段"}
+    assert events[1][1] == {"text": "，第二段。"}
+    assert events[2][1]["data"]["replyText"] == "第一段，第二段。"
+
+    assert client.post("/api/agent/chat", json=payload("继续")).status_code == 200
+    assert [(item["role"], item["content"]) for item in provider.calls[1][1:]] == [
+        ("user", "第一轮问题"),
+        ("assistant", "第一段，第二段。"),
+        ("user", "继续"),
+    ]
+
+
 def test_invalid_request_uses_error_contract() -> None:
     provider = RecordingProvider()
     client = TestClient(create_app(settings(), provider))
@@ -142,6 +183,18 @@ def test_llm_timeout_uses_error_code_5002() -> None:
     assert response.status_code == 504
     assert response.json()["code"] == 5002
     assert response.json()["data"] is None
+
+
+def test_stream_timeout_uses_error_event() -> None:
+    client = TestClient(create_app(settings(), TimeoutProvider()))
+
+    response = client.post("/api/agent/chat/stream", json=payload())
+
+    assert response.status_code == 200
+    events = parse_sse(response.text)
+    assert events[-1][0] == "error"
+    assert events[-1][1]["code"] == 5002
+    assert events[-1][1]["data"] is None
 
 
 def test_health_never_exposes_api_key() -> None:

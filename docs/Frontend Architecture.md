@@ -53,17 +53,17 @@ App.vue
 用户在 Chat 输入
   -> useAgentWorkbench
   -> chatApi.sendChatMessage
-  -> POST /api/agent/chat
+  -> POST /api/agent/chat/stream
   -> 后端 ChatService / LLM Provider
-  -> ChatData
-  -> 更新 Chat 消息和 userProfile
+  -> delta 事件逐步更新消息
+  -> done 事件更新最终 ChatData 和 userProfile
 
 用户在 Workspace 操作
   -> AgentAction
   -> workspaceMock.applyMockAction（当前阶段）
   -> 更新 WorkspaceState
   -> 转成一条普通 Chat 请求
-  -> POST /api/agent/chat
+  -> POST /api/agent/chat/stream
   -> Chat 自动显示 LLM 回复
 ```
 
@@ -101,6 +101,7 @@ Mock 状态在页面顶部、材料组件和政策卡片中都有可见标记。
 ## 9. 不要随意修改
 
 - `POST /api/agent/chat` 的路径、方法和已有字段。
+- `POST /api/agent/chat/stream` 的请求字段和 `delta`、`done`、`error` 事件含义。
 - `ChatRequest`、`ChatData` 和统一响应外层结构。
 - `chatApi.ts` 作为前端唯一 Chat HTTP 调用入口的边界。
 - `ChatService` 与 LLM Provider 的后端边界。

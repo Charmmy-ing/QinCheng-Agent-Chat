@@ -1,5 +1,5 @@
 import { computed, onMounted, ref, watch } from "vue";
-import { ChatApiError, sendChatMessage } from "../services/chatApi";
+import { ChatApiError, streamChatMessage } from "../services/chatApi";
 import {
   applyMockAction,
   createMockWorkspace,
@@ -174,12 +174,15 @@ export function useAgentWorkbench() {
     controller = requestController;
 
     try {
-      const response = await sendChatMessage(
+      const response = await streamChatMessage(
         {
           sessionId: session.sessionId,
           userId,
           message: content,
           userProfile: profileOverride ?? session.workspace.profile,
+        },
+        (chunk) => {
+          assistantMessage.content += chunk;
         },
         requestController.signal,
       );

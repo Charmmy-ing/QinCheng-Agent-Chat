@@ -52,3 +52,98 @@ export async function sendChatMessage(
   }
   return body.data;
 }
+
+interface StreamDelta {
+  text?: string;
+}
+
+function parseEventBlock(block: string): { event: string; data: unknown } | null {
+  const lines = block.split("\n");
+  const event = lines.find((line) => line.startsWith("event:"))?.slice(6).trim();
+  const data = lines
+    .filter((line) => line.startsWith("data:"))
+    .map((line) => line.slice(5).trimStart())
+    .join("\n");
+  if (!event || !data) return null;
+  return { event, data: JSON.parse(data) as unknown };
+}
+
+export async function streamChatMessage(
+  payload: ChatRequest,
+  onDelta: (text: string) => void,
+  signal?: AbortSignal,
+): Promise<ChatData> {
+  const fallbackTraceId = createTraceId();
+  let response: Response;
+  try {
+    response = await fetch("/api/agent/chat/stream", {
+      method: "POST",
+      headers: {
+        Accept: "text/event-stream",
+        "Content-Type": "application/json",
+        "X-Trace-Id": fallbackTraceId,
+      },
+      body: JSON.stringify(payload),
+      signal,
+    });
+  } catch (error) {
+    if (error instanceof DOMException && error.name === "AbortError") throw error;
+    throw new ChatApiError("无法连接对话服务，请检查服务是否已启动", fallbackTraceId);
+  }
+
+  if (!response.ok) {
+    try {
+      const body = (await response.json()) as ApiResponse<never>;
+      throw new ChatApiError(body.message || "请求失败，请稍后重试", body.traceId);
+    } catch (error) {
+      if (error instanceof ChatApiError) throw error;
+      throw new ChatApiError("对话服务暂时不可用，请稍后重试", fallbackTraceId);
+    }
+  }
+  if (!response.body) {
+    throw new ChatApiError("浏览器无法读取流式响应，请重试", fallbackTraceId);
+  }
+
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+  let result: ChatData | null = null;
+
+  const handleBlock = (block: string): void => {
+    let parsed: { event: string; data: unknown } | null;
+    try {
+      parsed = parseEventBlock(block);
+    } catch {
+      throw new ChatApiError("服务返回了无法识别的流式响应", fallbackTraceId);
+    }
+    if (!parsed) return;
+    if (parsed.event === "delta") {
+      const delta = parsed.data as StreamDelta;
+      if (typeof delta.text === "string") onDelta(delta.text);
+      return;
+    }
+    const envelope = parsed.data as ApiResponse<ChatData>;
+    if (parsed.event === "error") {
+      throw new ChatApiError(envelope.message || "请求失败，请稍后重试", envelope.traceId);
+    }
+    if (parsed.event === "done" && envelope.code === 0 && envelope.data) {
+      result = envelope.data;
+    }
+  };
+
+  while (true) {
+    const { done, value } = await reader.read();
+    buffer += decoder.decode(value, { stream: !done });
+    buffer = buffer.replace(/\r\n/g, "\n");
+    let boundary = buffer.indexOf("\n\n");
+    while (boundary >= 0) {
+      handleBlock(buffer.slice(0, boundary));
+      buffer = buffer.slice(boundary + 2);
+      boundary = buffer.indexOf("\n\n");
+    }
+    if (done) break;
+  }
+  if (buffer.trim()) handleBlock(buffer);
+  if (!result) throw new ChatApiError("流式响应意外中断，请重试", fallbackTraceId);
+  return result;
+}
